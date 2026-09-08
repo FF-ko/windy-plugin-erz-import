@@ -1,0 +1,35 @@
+{
+    "name": "windy-plugin-erz-import",
+    "version": "1.0.0",
+    "description": "Imports ERZ sailing weather-routing files and syncs the route position with Windy's forecast timeline",
+    "main": "dist/plugin.min.js",
+    "type": "module",
+    "scripts": {
+        "start": "rollup -w -c",
+        "build": "rm -rf dist && mkdir dist && SERVE=false rollup -c && cp package.json dist/",
+        "check": "svelte-check --threshold error --output human",
+        "test": "vitest run"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/FF-ko/windy-plugin-erz-import.git"
+    },
+    "keywords": [
+        "windy",
+        "windy.com",
+        "plugins",
+        "sailing",
+        "routing",
+        "erz"
+    ],
+    "author": "Rastislav Pecena",
+    "license": "ISC",
+    "dependencies": {
+        "@windycom/plugin-devtools": "^3.0.4"
+    },
+    "devDependencies": {
+        "@types/node": "^26.5.0",
+        "svelte-check": "^4.7.6",
+        "vitest": "^5.0.0"
+    }
+}

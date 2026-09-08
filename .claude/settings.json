@@ -1,0 +1,22 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(pnpm lint)",
+            "Bash(pnpm lint *)",
+            "Bash(pnpm test)",
+            "Bash(pnpm test *)",
+            "Bash(pnpm vitest run *)",
+            "Bash(pnpm exec svelte-check *)",
+            "Bash(pnpm exec eslint *)",
+            "Bash(pnpm exec prettier --check *)",
+            "Bash(npm run lint)",
+            "Bash(./node_modules/.bin/vitest run *)",
+            "Bash(./node_modules/.bin/svelte-check *)",
+            "Bash(./node_modules/.bin/eslint *)",
+            "Bash(./node_modules/.bin/prettier --check *)",
+            "Bash(./node_modules/.bin/tsc --noEmit *)",
+            "Bash(./node_modules/.bin/tsc --skipLibCheck --noEmit *)",
+            "Bash(npm -v)"
+        ]
+    }
+}
