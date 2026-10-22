@@ -1,7 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { parseErz, readErzFile } from '../src/lib/erz';
 import { bearingDeg, distanceNm } from '../src/lib/geo';
@@ -168,10 +171,21 @@ describe('route sampling', () => {
 
 /** Guards `sample/erz-shift.mjs`: a shifted file must differ only in its dates. */
 describe('date-shifted sample', () => {
-    const shiftedPath = fileURLToPath(new URL('../sample/Routing_9.9.2026.erz', import.meta.url));
+    const shiftScript = fileURLToPath(new URL('../sample/erz-shift.mjs', import.meta.url));
+
+    let workDir = '';
+    let shiftedPath = '';
+
+    beforeAll(() => {
+        workDir = mkdtempSync(join(tmpdir(), 'erz-shift-'));
+        shiftedPath = join(workDir, 'shifted.erz');
+        execFileSync(process.execPath, [shiftScript, samplePath, '2026-09-09', '-o', shiftedPath]);
+    });
+
+    afterAll(() => rmSync(workDir, { recursive: true, force: true }));
 
     const loadShifted = async () =>
-        parseErz(await readErzFile(new File([readFileSync(shiftedPath)], 'Routing_9.9.2026.erz')));
+        parseErz(await readErzFile(new File([readFileSync(shiftedPath)], 'shifted.erz')));
 
     it('parses, and keeps the geometry and leg timings of the original', async () => {
         const original = await load();

@@ -11,17 +11,19 @@
         {title}
     </div>
 
-    {#if !route}
+    {#if !$activeRoute}
         <DropZone onFile={loadFile} />
         <p class="erz__lead">
             ERZ is the gzipped export produced by sailing weather-routing software. The route is
             drawn on the map and the boat follows Windy's timeline, whichever overlay and model you
-            have selected.
+            have selected. It stays on the map after you close this panel, until you remove it.
         </p>
     {:else}
-        {#if sample}
-            <Readout {sample} totalNm={route.distanceNm} />
-        {/if}
+        {@const { route, sample, fileName, rangeWarning } = $activeRoute}
+        {@const startTime = routeStart(route)}
+        {@const endTime = routeEnd(route)}
+
+        <Readout {sample} totalNm={route.distanceNm} />
 
         {#if rangeWarning}
             <div class="erz__warning">{rangeWarning}</div>
@@ -63,7 +65,7 @@
         </dl>
 
         <label class="erz__timebase">
-            <input type="checkbox" checked={route.timeBase === 'utc'} on:change={toggleTimeBase} />
+            <input type="checkbox" checked={route.timeBase === 'utc'} on:change={switchTimeBase} />
             File timestamps are UTC
         </label>
     {/if}
@@ -75,17 +77,20 @@
 
 <script lang="ts">
     import bcast from '@windy/broadcast';
-    import store from '@windy/store';
-
-    import { onDestroy, onMount } from 'svelte';
 
     import DropZone from './components/DropZone.svelte';
     import Readout from './components/Readout.svelte';
 
-    import { ErzParseError, parseErz, readErzFile, type ErzRoute, type TimeBase } from './lib/erz';
+    import {
+        activeRoute,
+        clearRoute,
+        jumpToStart,
+        loadRoute,
+        toggleTimeBase,
+    } from './lib/activeRoute';
+    import { ErzParseError, parseErz, readErzFile, type ErzRoute } from './lib/erz';
     import { formatClock, formatDistance, formatDuration } from './lib/format';
-    import { RouteLayer } from './lib/mapLayer';
-    import { routeEnd, routeStart, sampleRouteAt, type RouteSample } from './lib/route';
+    import { routeEnd, routeStart } from './lib/route';
 
     import config from './pluginConfig';
 
@@ -93,21 +98,7 @@
 
     const backToMenu = () => bcast.emit('rqstOpen', 'menu');
 
-    let route: ErzRoute | null = null;
-    let sample: RouteSample | null = null;
-    let layer: RouteLayer | null = null;
-    let fileName = '';
     let error = '';
-    let rangeWarning = '';
-
-    /** Kept so the time base can be switched without asking for the file again. */
-    let rawText = '';
-
-    let subscriptions: number[] = [];
-    let pendingFrame = 0;
-
-    $: startTime = route ? routeStart(route) : 0;
-    $: endTime = route ? routeEnd(route) : 0;
 
     const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -116,148 +107,33 @@
     const loadFile = async (file: File) => {
         error = '';
 
+        let text: string;
         let parsed: ErzRoute;
 
         try {
-            rawText = await readErzFile(file);
-            parsed = parseErz(rawText, 'utc');
+            text = await readErzFile(file);
+            parsed = parseErz(text, 'utc');
         } catch (e) {
             clearRoute();
             error = e instanceof ErzParseError ? e.message : `Could not read the file: ${reason(e)}`;
             return;
         }
 
-        fileName = file.name;
-
         try {
-            applyRoute(parsed);
-            layer?.fitBounds();
+            loadRoute(parsed, text, file.name);
         } catch (e) {
             clearRoute();
             error = `The route could not be drawn on the map: ${reason(e)}`;
         }
     };
 
-    const applyRoute = (parsed: ErzRoute) => {
-        layer?.destroy();
-
-        route = parsed;
-        layer = new RouteLayer(parsed);
-
-        syncToTimeline();
-        updateRangeWarning();
-    };
-
-    const toggleTimeBase = () => {
-        if (!route) {
-            return;
-        }
-
-        const next: TimeBase = route.timeBase === 'utc' ? 'local' : 'utc';
-
+    const switchTimeBase = () => {
         try {
-            applyRoute(parseErz(rawText, next));
+            toggleTimeBase();
         } catch (e) {
             error = reason(e);
         }
     };
-
-    const clearRoute = () => {
-        layer?.destroy();
-        layer = null;
-        route = null;
-        sample = null;
-        rangeWarning = '';
-        rawText = '';
-        fileName = '';
-    };
-
-    /** Moves the boat to whatever moment the timeline is showing. */
-    const syncToTimeline = () => {
-        if (!route) {
-            return;
-        }
-
-        const next = sampleRouteAt(route, store.get('timestamp'));
-        sample = next;
-        layer?.update(next);
-    };
-
-    // The timeline emits a timestamp per frame while animating, so redraws are
-    // coalesced to one per animation frame.
-    const scheduleSync = () => {
-        if (pendingFrame) {
-            return;
-        }
-
-        pendingFrame = requestAnimationFrame(() => {
-            pendingFrame = 0;
-            syncToTimeline();
-        });
-    };
-
-    /**
-     * The selected model decides how far the timeline reaches, so the warning is
-     * recomputed whenever the user switches model or overlay.
-     */
-    const updateRangeWarning = () => {
-        rangeWarning = '';
-
-        if (!route) {
-            return;
-        }
-
-        const calendar = store.get('calendar');
-        if (!calendar) {
-            return;
-        }
-
-        // Read the span from the route directly — Svelte's reactive values have
-        // not been recomputed yet when this runs straight after a load.
-        const from = routeStart(route);
-        const to = routeEnd(route);
-
-        if (from > calendar.end) {
-            rangeWarning = 'The route starts after the selected model’s forecast ends.';
-        } else if (to < calendar.start) {
-            rangeWarning = 'The route ended before the selected model’s forecast begins.';
-        } else if (to > calendar.end || from < calendar.start) {
-            rangeWarning = 'Only part of the route is covered by the selected model.';
-        }
-    };
-
-    const jumpToStart = () => {
-        if (!route) {
-            return;
-        }
-
-        const from = routeStart(route);
-        const calendar = store.get('calendar');
-
-        store.set('timestamp', calendar ? calendar.boundTs(from) : from);
-    };
-
-    export const onopen = () => {
-        layer?.fitBounds();
-    };
-
-    onMount(() => {
-        subscriptions = [
-            store.on('timestamp', scheduleSync),
-            store.on('calendar', updateRangeWarning),
-        ];
-    });
-
-    onDestroy(() => {
-        subscriptions.forEach(id => store.off(id));
-        subscriptions = [];
-
-        if (pendingFrame) {
-            cancelAnimationFrame(pendingFrame);
-        }
-
-        clearRoute();
-    });
 </script>
 
 <style lang="less">

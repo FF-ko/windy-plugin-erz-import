@@ -47,11 +47,12 @@ The response carries the install URL, in the form
 Every upload needs a **higher version than the last** — bump `version` in both
 `src/pluginConfig.ts` and `package.json`. Republishing the same version is rejected.
 
-`private: true` in `src/pluginConfig.ts` keeps the plugin out of the public gallery while leaving
-the URL shareable with anyone. Going public means setting it to `false` and asking Windy to review
-it on the [plugin forum](https://community.windy.com/category/21/windy-plugins); a gallery
-submission also needs a `src/screenshot.jpg` — the build copies the first
-`screenshot.{jpg,png,webp,jpeg}` found next to `plugin.svelte` into `dist/`.
+`private: false` in `src/pluginConfig.ts` lets Windy offer the plugin in the public gallery once
+they have reviewed it — request that by posting the install URL in the
+[List of Finished Windy Plugins](https://community.windy.com/topic/31066/list-of-finished-windy-plugins-v42)
+forum thread. Until approval the URL still installs it for anyone. The gallery picture is
+`src/screenshot.png`: the build copies the first `screenshot.{jpg,png,webp,jpeg}` found next to
+`plugin.svelte` into `dist/`.
 
 If the project lives on GitHub, the template's `.github/workflows/publish-plugin.yml` does the same
 thing from a `workflow_dispatch` run with `WINDY_API_KEY` as a repository secret.
@@ -72,8 +73,8 @@ survive untouched; the gzip container, Latin-1 encoding, CRLF endings and field 
 preserved. The weather model run embedded in field 27 moves with the route. Dependency-free Node —
 gzip round-trips, Latin-1 and date arithmetic are all fragile in pure shell on macOS.
 
-`sample/Routing_9.9.2026.erz` is that sample shifted to 9 Sep 2026, and the test suite asserts it
-still differs from the original in nothing but its dates.
+Shifted copies written next to the sample are gitignored. The test suite runs the script into a
+temporary directory and asserts the result differs from the original in nothing but its dates.
 
 ## The ERZ format
 
@@ -132,12 +133,17 @@ A checkbox in the panel re-reads the file as local time for exports that turn ou
 | `src/lib/route.ts` | binary search by time, position and readings at any instant |
 | `src/lib/mapLayer.ts` | polyline, step dots, marks, heading-rotated boat |
 | `src/lib/format.ts` | display formatting; wind uses the user's Windy units |
-| `src/plugin.svelte` | panel, file loading, timeline subscription, cleanup |
+| `src/lib/activeRoute.ts` | the loaded route, its map layer and timeline subscriptions |
+| `src/plugin.svelte` | panel and file loading |
 
 Timeline sync is `store.on('timestamp', …)`, coalesced to one redraw per animation frame so
 animating the timeline stays smooth. The forecast range comes from the `calendar` store key, which
 is re-read on change so switching model or overlay updates the "outside forecast range" warning.
-Both subscriptions are released in `onDestroy`.
+
+The route outlives the panel. Windy destroys the panel component on every close but evaluates the
+plugin module once, so `activeRoute.ts` keeps the layer and both subscriptions alive: the boat keeps
+following the timeline on the map, a reopened panel shows the same route without another import,
+and only **Remove** releases it. A page reload still starts empty.
 
 Speed, course and sail describe the leg *ending* at a point, so they are held constant across a
 segment; position, wind, gust, pressure and temperature are interpolated between the two endpoints.
