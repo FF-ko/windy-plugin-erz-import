@@ -2,7 +2,7 @@ import type { ExternalPluginConfig } from '@windy/interfaces';
 
 const config: ExternalPluginConfig = {
     name: 'windy-plugin-erz-import',
-    version: '1.1.0',
+    version: '1.1.1',
     title: 'ERZ routing import',
     icon: '⛵',
     description:

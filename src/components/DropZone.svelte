@@ -12,7 +12,9 @@
 
     <label class="button button--variant-orange size-s">
         Choose file
-        <input type="file" accept=".erz,.erz10,.gz" on:change={handleSelect} />
+        <!-- No `accept` filter: mobile pickers match by MIME type or UTI, which `.erz` lacks,
+             so they grey the file out. The parser validates the content instead. -->
+        <input type="file" on:change={handleSelect} />
     </label>
 </div>
 
